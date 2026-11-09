@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Packaging (packaging/build.py drives PyInstaller; the .spec it writes is a by-product)
+*.spec
+*.spec.bak
+
+# Test / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Credentials that must never be committed (exported cookies, saved sessions)
+cookies.txt
+*cookies*.json
+session.json
+
+# App data accidentally created in-tree
+appdata/

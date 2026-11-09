@@ -1,0 +1,115 @@
+name: Test, build & release
+
+# - Every push / pull request: run the test suite on Windows, macOS and Linux.
+# - Manual run (Actions tab > "Run workflow"): also build + smoke-test every platform.
+# - Pushing a tag like v1.2.3: build, smoke-test, and publish a GitHub release with the builds.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install -r requirements.txt pytest
+      - run: python -m pytest -q
+      - name: Check the tag matches the app version and has changelog notes
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Linux'
+        run: python packaging/release_notes.py "$GITHUB_REF_NAME"
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: windows-x64, os: windows-latest }
+          - { target: macos-arm64, os: macos-latest }
+          - { target: macos-x64,   os: macos-15-intel }
+          # Oldest available Ubuntu, so the binary runs on as many distros (glibc versions) as possible.
+          - { target: linux-x64,   os: ubuntu-22.04 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Linux system libraries (Qt web engine + virtual display for the smoke test)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xauth \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 \
+            libegl1 libgl1 libnss3 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxkbfile1 \
+            libasound2 libdbus-1-3 libfontconfig1
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+          if [ "$RUNNER_OS" = "Linux" ]; then python -m pip install "pywebview[qt]"; fi
+
+      - name: Build
+        run: python packaging/build.py --release
+
+      - name: Smoke test (launch the packaged app once)
+        run: python packaging/smoke_test.py dist/release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Release notes
+        run: python3 packaging/release_notes.py "$GITHUB_REF_NAME" > notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "Brightspace Downloader ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            --verify-tag

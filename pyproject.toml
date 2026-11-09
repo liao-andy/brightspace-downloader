@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brightspace-downloader"
+dynamic = ["version"]  # single source of truth: brightspace_downloader/__init__.py
+description = "Cross-platform desktop app to bulk-download course content files from D2L Brightspace, preserving the folder structure."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "pywebview>=5.0,<7",
+    "requests>=2.31",
+]
+
+[project.urls]
+Homepage = "https://github.com/liao-andy/brightspace-downloader"
+Releases = "https://github.com/liao-andy/brightspace-downloader/releases"
+Issues = "https://github.com/liao-andy/brightspace-downloader/issues"
+
+[project.optional-dependencies]
+browser = ["browser_cookie3>=0.19"]
+dev = ["pytest>=7"]
+
+[project.gui-scripts]
+brightspace-downloader = "brightspace_downloader.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "brightspace_downloader.__version__" }
+
+[tool.setuptools]
+packages = [
+    "brightspace_downloader",
+    "brightspace_downloader.cookies",
+]
+
+[tool.setuptools.package-data]
+brightspace_downloader = ["web/*.html", "web/*.css", "web/*.js", "web/*.svg", "assets/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
