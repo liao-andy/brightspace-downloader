@@ -26,6 +26,21 @@ def _icon_path() -> str | None:
     return str(icon) if icon.is_file() else None
 
 
+def _linux_gui() -> str | None:
+    """Pick the Linux web engine up front instead of letting pywebview try GTK first.
+
+    The standalone Linux build ships Qt only; letting pywebview attempt GTK there logs a scary
+    "GTK cannot be loaded" traceback before it falls back. From source, GTK stays the default.
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    import importlib.util
+
+    if importlib.util.find_spec("gi") is None and importlib.util.find_spec("qtpy") is not None:
+        return "qt"
+    return None
+
+
 def _set_windows_app_id() -> None:
     """Give the process its own taskbar identity on Windows.
 
@@ -102,7 +117,8 @@ def main() -> int:
     # still-valid Brightspace session (they last ~180 min) does not force a fresh login.
     storage = app_data_dir() / "webview"
     storage.mkdir(parents=True, exist_ok=True)
-    webview.start(debug=debug, private_mode=False, storage_path=str(storage), icon=_icon_path())
+    webview.start(gui=_linux_gui(), debug=debug, private_mode=False, storage_path=str(storage),
+                  icon=_icon_path())
     return 0
 
 
